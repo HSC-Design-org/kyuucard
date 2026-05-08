@@ -1,0 +1,13 @@
+{
+  "name": "kyuucard-data",
+  "version": "1.0.0",
+  "private": true,
+  "description": "kyuucard.net 給油価格データ自動取得（経産省 石油製品価格調査の週次xlsxを取得→data.jsonに変換）",
+  "scripts": {
+    "scrape": "node scrape.js"
+  },
+  "dependencies": {
+    "playwright": "^1.49.1",
+    "xlsx": "^0.18.5"
+  }
+}
