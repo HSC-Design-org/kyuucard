@@ -18,7 +18,9 @@ const FUEL_COLUMNS = {
 };
 
 const DATA_ROW_START = 7;   // 北海道局
-const DATA_ROW_END   = 62;  // 九州沖縄局 (row 63 is 全国, exclude)
+const DATA_ROW_END   = 61;  // 九州沖縄局 (row 62 is 全国, exclude)
+// 念のため名前ベースでも除外: 「全国」「全 国」など空白入りの可能性に対応
+const EXCLUDE_NAME_PATTERN = /^全\s*国$/;
 
 (async () => {
   const browser = await chromium.launch({
@@ -89,6 +91,8 @@ const DATA_ROW_END   = 62;  // 九州沖縄局 (row 63 is 全国, exclude)
       if (!nameCell || nameCell.v == null) continue;
       const name = String(nameCell.v).trim();
       if (!name) continue;
+      // 「全国」行を除外（行範囲指定とのダブルチェック）
+      if (EXCLUDE_NAME_PATTERN.test(name.replace(/[\s　]+/g, ''))) continue;
       const v = valueCell ? valueCell.v : null;
       if (v == null) continue;
       data[name] = (typeof v === 'number') ? Math.round(v * 10) / 10 : v;
