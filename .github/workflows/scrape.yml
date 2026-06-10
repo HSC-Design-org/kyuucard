@@ -2,8 +2,11 @@ name: Scrape weekly fuel prices
 
 on:
   schedule:
-    # 毎週月曜 09:00 JST = 00:00 UTC
-    - cron: '0 0 * * 1'
+    # 毎日 15:23 JST = 06:23 UTC
+    # 経産省の公表は原則水曜14時JST（祝日週は木曜等にズレる）ため、
+    # 毎日チェックして公表当日に取得する。変更がない日は commit しない。
+    # 00分台はGitHubの混雑で数時間遅延するため 23分を指定。
+    - cron: '23 6 * * *'
   workflow_dispatch:
 
 permissions:
