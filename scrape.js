@@ -103,6 +103,16 @@ const EXCLUDE_NAME_PATTERN = /^全\s*国$/;
   }
 
   const outPath = path.join(__dirname, 'data.json');
+  // 実データ（source_url と価格表）に変更がなければ書き換えない。
+  // timestamp は毎回変わるため、これを含めて比較すると毎回コミットが発生してしまう。
+  if (fs.existsSync(outPath)) {
+    const prev = JSON.parse(fs.readFileSync(outPath, 'utf8'));
+    if (prev.source_url === cacheData.source_url &&
+        JSON.stringify(prev.sheets) === JSON.stringify(cacheData.sheets)) {
+      console.log('No data change; keeping existing data.json');
+      return;
+    }
+  }
   fs.writeFileSync(outPath, JSON.stringify(cacheData, null, 2));
   console.log(`Wrote ${outPath}`);
 })().catch(err => {
