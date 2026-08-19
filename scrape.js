@@ -37,6 +37,7 @@ const EXCLUDE_NAME_PATTERN = /^全\s*国$/;
     timezoneId: 'Asia/Tokyo',
     viewport: { width: 1280, height: 800 },
     extraHTTPHeaders: { 'Accept-Language': 'ja,en-US;q=0.9,en;q=0.8' },
+    acceptDownloads: true,
   });
   await context.addInitScript(() => {
     Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
@@ -58,15 +59,22 @@ const EXCLUDE_NAME_PATTERN = /^全\s*国$/;
   if (!xlsxUrl) throw new Error('結果詳細版 xlsx link not found');
   console.log(`Latest xlsx: ${xlsxUrl}`);
 
-  // Download the xlsx through the page context (uses Akamai cookies)
-  const buffer = await page.evaluate(async (url) => {
-    const r = await fetch(url, { credentials: 'include' });
-    if (!r.ok) throw new Error(`fetch ${url} failed: ${r.status}`);
-    const ab = await r.arrayBuffer();
-    return Array.from(new Uint8Array(ab));
-  }, xlsxUrl);
-  const xlsxBuffer = Buffer.from(buffer);
+  // Download the xlsx via a real browser navigation (full Akamai/browser stack).
+  // ページ内 fetch() は 2026-07 頃から Akamai に弾かれ 0 バイトで返るようになったため、
+  // ブラウザのダウンロード機構経由（クッキー・TLS・ヘッダすべて本物）に変更した。
+  await page.waitForTimeout(2000); // Akamai センサー送信を待つ
+  const [download] = await Promise.all([
+    page.waitForEvent('download', { timeout: 60000 }),
+    // xlsx への遷移は download 扱いになり goto が reject するので握りつぶす
+    page.goto(xlsxUrl, { timeout: 60000 }).catch(() => {}),
+  ]);
+  const dlPath = await download.path();
+  const xlsxBuffer = fs.readFileSync(dlPath);
   console.log(`Downloaded ${xlsxBuffer.length} bytes`);
+  // 0バイト/極小はブロックされた証拠。空ファイルをパースして誤データを書かないよう明示的に失敗させる。
+  if (xlsxBuffer.length < 5000) {
+    throw new Error(`xlsx too small (${xlsxBuffer.length} bytes) — download likely blocked by Akamai`);
+  }
 
   await browser.close();
 
