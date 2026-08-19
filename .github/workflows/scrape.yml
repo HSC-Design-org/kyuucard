@@ -59,3 +59,24 @@ jobs:
               git push
             fi
           fi
+
+      # 失敗したときだけ Slack に通知する（成功時は何も送らない）。
+      # 2026-08-19追加。理由＝取得が7週間止まってもエラーが誰にも届かず、
+      # サイトが6月のデータを表示し続けたことに気づけなかったため。
+      # チャンネルIDは secrets.SLACK_CHANNEL_ID。未設定なら黙ってスキップする。
+      - name: Notify Slack on failure
+        if: failure()
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+          SLACK_CHANNEL_ID: ${{ secrets.SLACK_CHANNEL_ID }}
+        run: |
+          if [ -z "$SLACK_BOT_TOKEN" ] || [ -z "$SLACK_CHANNEL_ID" ]; then
+            echo "Slack secrets not set; skipping notification"
+            exit 0
+          fi
+          RUN_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          TEXT=":rotating_light: 給油価格ランキングの自動取得に失敗しました（kyuucard.net /rank/）— 直さないとサイトの価格表示が古いまま止まります。ログ: ${RUN_URL}"
+          BODY=$(jq -n --arg c "$SLACK_CHANNEL_ID" --arg t "$TEXT" '{channel:$c,text:$t}')
+          curl -sS -X POST https://slack.com/api/chat.postMessage -H "Authorization: Bearer ${SLACK_BOT_TOKEN}" -H "Content-type: application/json; charset=utf-8" --data "$BODY" > slack_res.json
+          jq -r 'if .ok then "slack: sent" else "slack: FAILED " + (.error // "unknown") end' slack_res.json
+          rm -f slack_res.json
