@@ -2,11 +2,14 @@ name: Scrape weekly fuel prices
 
 on:
   schedule:
-    # 毎週 水・木 15:53 JST = 06:53 UTC
+    # 毎週 水・木・金・土 15:53 JST = 06:53 UTC
     # 経産省の公表は原則水曜14時JST → 水曜夕方に取得。
-    # 祝日週は公表が木曜以降にズレるため、木曜夕方にもう1回（保険）。
-    # 変更がない日は commit しない。00分台はGitHubの混雑を避けて53分を指定。
-    - cron: '53 6 * * 3,4'
+    # 祝日週は公表が木曜以降にズレるため木曜も実行。
+    # さらに金・土を保険に入れてある（2026-08-19追加）。理由＝水木が両方失敗すると
+    # その週の更新が丸ごと飛ぶため。一時的な失敗なら金土で自動的に取り返せる。
+    # 変更がない日は commit しない（＝余分な実行をしても履歴は汚れない）。
+    # 00分台はGitHubの混雑を避けて53分を指定。
+    - cron: '53 6 * * 3,4,5,6'
   workflow_dispatch:
 
 permissions:
@@ -42,4 +45,17 @@ jobs:
             git push
           else
             echo "No changes in data.json"
+            # GitHub は「60日間コミットが無い公開リポジトリ」のスケジュール実行を自動停止する。
+            # スクレイプが失敗し続けると data.json のコミットも止まり、静かに無効化されて
+            # 修正しても動かない状態になる（2026-08-19に49日まで到達し、あと11日だった）。
+            # そこで30日以上コミットが無ければハートビートだけ打って、停止を確実に防ぐ。
+            LAST_COMMIT_TS=$(git log -1 --format=%ct)
+            AGE_DAYS=$(( ( $(date -u +%s) - LAST_COMMIT_TS ) / 86400 ))
+            echo "last commit age: ${AGE_DAYS}d"
+            if [ "$AGE_DAYS" -ge 30 ]; then
+              date -u '+%Y-%m-%d %H:%M UTC' > .github/last-heartbeat
+              git add .github/last-heartbeat
+              git commit -m "chore: keep scheduled workflow alive (no data change for ${AGE_DAYS}d)"
+              git push
+            fi
           fi
